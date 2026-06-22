@@ -409,16 +409,37 @@ MENU_PARAMS = [
         ("filter_type",    "Filter Type (0=none,1=mov,2=rep)"),
         ("filter_const",   "Filter Constant (0-255)"),
     ]),
-    ("STW-CAN Config", [
-        ("can_bitrate_hdr", "CAN Bitrate (header)"),
+    ("CAN Bus", [
+        ("can_bitrate_hdr", "Bus Bitrate (all modes)"),
+    ]),
+    ("STW-CAN Config (ignored on J1939 units)", [
         ("can_id",          "CAN ID"),
         ("can_type",        "CAN Type"),
-        ("can_bitrate",     "CAN Bitrate"),
+        ("can_bitrate",     "CAN Bitrate (STW-CAN only)"),
         ("controlbyte",     "Controlbyte"),
         ("interval",        "Interval (ms)"),
         ("pressure_prop",   "Pressure Property"),
     ]),
 ]
+
+PARAM_WARNINGS = {
+    "can_bitrate_hdr": (
+        "WARNING: Changing the bus bitrate means the sensor will boot at the new rate.\n"
+        "  You must reconfigure your CAN adapter to match before reconnecting:\n"
+        "    sudo ip link set can1 down\n"
+        "    sudo ip link set can1 type can bitrate <new_rate_bps>\n"
+        "    sudo ip link set can1 up\n"
+        "  Common values: 125 (125k), 250 (250k), 500 (500k), 1000 (1M)"
+    ),
+    "can_bitrate": (
+        "NOTE: This field only applies to STW-CAN mode sensors.\n"
+        "  On J1939 units (Device-ID 'YM1J'), this field is ignored."
+    ),
+    "can_id": (
+        "NOTE: On J1939 units, this address range (0x91) is used for Source Addr Start.\n"
+        "  Only change this on STW-CAN units."
+    ),
+}
 
 READONLY_PARAMS = [
     ("pressure_low",  "Pressure Range Low"),
@@ -525,6 +546,9 @@ def cmd_menu(m01, args):
                 if k == key:
                     label = l
                     break
+
+        if key in PARAM_WARNINGS:
+            print(f"\n  {PARAM_WARNINGS[key]}\n")
 
         cur = values.get(key)
         cur_str = f"{cur} (0x{cur:0{size*2}X})" if cur is not None else "<unknown>"
