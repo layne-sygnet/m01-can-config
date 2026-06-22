@@ -175,6 +175,28 @@ The sensor must be power-cycled during the connect sequence:
 
 Response value is at **data[5]** in the 0x052 reply.
 
+## FAQ
+
+**Can I edit multiple parameters in one power-cycle?**
+
+Yes. The `menu` command stays connected after each write, so you can change as many parameters as you like in a single session. Each edit is written and checksum-updated immediately. Power-cycle the sensor once at the end to apply all changes.
+
+**What happens if I change the CAN bitrate?**
+
+The sensor will boot at the new bitrate on next power-up. Your CAN adapter must be reconfigured to match before you can communicate again:
+
+```bash
+sudo ip link set can1 down
+sudo ip link set can1 type can bitrate <new_rate_bps>
+sudo ip link set can1 up
+```
+
+If you set an incorrect bitrate and lose communication, you can always reconnect by configuring your adapter to the new rate and running `menu` again to fix it.
+
+**What are the STW-CAN fields (options 17–23) and do they matter on my J1939 sensor?**
+
+The M01-CAN ships in two protocol variants: J1939 (Device-ID `YM1J`) and STW-CAN. The STW-CAN fields — CAN ID, CAN Type, CAN Bitrate (STW-CAN only), Controlbyte, Interval, and Pressure Property — only apply to STW-CAN mode units. On J1939 sensors, these fields are ignored by the firmware. The "Bus Bitrate" field at address 0x24 (option 17) is the exception: it controls the actual bus rate for **all** modes. The STW-CAN-only bitrate at 0x96 (option 20) is a separate field that only STW-CAN firmware reads.
+
 ## License
 
 MIT
