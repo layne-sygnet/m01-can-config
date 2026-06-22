@@ -409,6 +409,15 @@ MENU_PARAMS = [
         ("filter_type",    "Filter Type (0=none,1=mov,2=rep)"),
         ("filter_const",   "Filter Constant (0-255)"),
     ]),
+    ("STW-CAN Config", [
+        ("can_bitrate_hdr", "CAN Bitrate (header)"),
+        ("can_id",          "CAN ID"),
+        ("can_type",        "CAN Type"),
+        ("can_bitrate",     "CAN Bitrate"),
+        ("controlbyte",     "Controlbyte"),
+        ("interval",        "Interval (ms)"),
+        ("pressure_prop",   "Pressure Property"),
+    ]),
 ]
 
 READONLY_PARAMS = [
