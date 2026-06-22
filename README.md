@@ -31,7 +31,33 @@ No OS-level setup needed — python-can handles the serial connection directly.
 
 ## Usage
 
-Every command requires a power-cycle of the sensor during the connect handshake. The script will prompt you when to unplug and replug.
+Every command requires a power-cycle of the sensor during the connect handshake. The script prompts you to unplug the sensor, press Enter, then plug it back in within 5 seconds.
+
+### Interactive Menu (recommended)
+
+The easiest way to configure the sensor. Connects, reads all parameters, and presents a numbered menu for editing:
+
+```bash
+sudo python3 m01config.py -i socketcan -c can1 menu
+```
+
+```
+  STW M01-CAN — Device 'YM1J', FW 0x81.0x10
+  ==========================================================
+
+  J1939 Message Config:
+   1) PGN                              = 65283    (0xFF03)
+   2) SPN                              = 1        (0x0001)
+   3) Slot                             = 0        (0x00)
+   4) Transmission Rate (ms)           = 100      (0x0064)
+   5) Data Length                       = 2        (0x02)
+   6) Priority (0-7)                   = 6        (0x06)
+   ...
+
+  Enter number to edit, 'r' to re-read, 'q' to quit:
+```
+
+Pick a number, enter the new value (decimal or hex with `0x` prefix), and the tool writes it, updates checksums, and confirms with a readback. Type `r` to re-read all values, `q` to quit.
 
 ### Scan — connect and show sensor info
 
@@ -55,7 +81,7 @@ sudo python3 m01config.py -i socketcan -c can1 rawdump
 sudo python3 m01config.py -i socketcan -c can1 rawdump --start 0x90 --end 0xBF
 ```
 
-### Set J1939 parameters
+### Set J1939 parameters (non-interactive)
 
 ```bash
 # Set PGN, SPN, transmission rate, and priority

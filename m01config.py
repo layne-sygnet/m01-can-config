@@ -179,12 +179,8 @@ class M01:
         """Full connect handshake: ABGLEICH → node scan → CompanyID."""
         self._drain()
 
-        input("  Unplug the sensor power, then press ENTER...")
-        print()
-        input("  Ready to plug it back in? Press ENTER to start ABGLEICH flood...")
-        print()
-        print("  >>> PLUG THE SENSOR IN NOW <<<")
-        print("  Sending ABGLEICH for 5 seconds...")
+        input("  Unplug the sensor, press ENTER, then plug it back in within 5 seconds...")
+        print("  Sending ABGLEICH — plug the sensor in NOW...")
 
         # Phase 1: ABGLEICH flood
         t0 = time.time()
@@ -390,6 +386,173 @@ def cmd_rawdump(m01, args):
     return 0
 
 
+MENU_PARAMS = [
+    ("J1939 Message Config", [
+        ("pgn",            "PGN"),
+        ("spn",            "SPN"),
+        ("slot",           "Slot"),
+        ("trr",            "Transmission Rate (ms)"),
+        ("data_length",    "Data Length"),
+        ("priority",       "Priority (0-7)"),
+        ("edp",            "Ext. Data Page"),
+        ("dp",             "Data Page"),
+        ("data_position",  "Data Position (0-7)"),
+        ("src_addr_start", "Source Addr Start"),
+        ("src_addr_range", "Source Addr Range"),
+    ]),
+    ("Data Range", [
+        ("span_enable",    "Span Enable (0/1)"),
+        ("span_min",       "Span Min (0%)"),
+        ("span_max",       "Span Max (100%)"),
+    ]),
+    ("Filter", [
+        ("filter_type",    "Filter Type (0=none,1=mov,2=rep)"),
+        ("filter_const",   "Filter Constant (0-255)"),
+    ]),
+]
+
+READONLY_PARAMS = [
+    ("pressure_low",  "Pressure Range Low"),
+    ("pressure_high", "Pressure Range High"),
+    ("adc_low",       "ADC Range Low"),
+    ("adc_high",      "ADC Range High"),
+]
+
+
+def _read_all_params(m01):
+    values = {}
+    for _, params in MENU_PARAMS:
+        for key, _ in params:
+            try:
+                values[key] = m01.get_param(key)
+            except IOError:
+                values[key] = None
+    for key, _ in READONLY_PARAMS:
+        try:
+            values[key] = m01.get_param(key)
+        except IOError:
+            values[key] = None
+    return values
+
+
+def _print_menu(device_id, fw, values):
+    print()
+    fw_str = f"FW 0x{fw[0]:02X}.0x{fw[1]:02X}" if fw else "FW unknown"
+    print(f"  STW M01-CAN — Device '{device_id}', {fw_str}")
+    print(f"  {'=' * 58}")
+
+    num = 1
+    index = []
+    for group_name, params in MENU_PARAMS:
+        print(f"\n  {group_name}:")
+        for key, label in params:
+            addr, size = PARAMS[key]
+            v = values.get(key)
+            if v is not None:
+                print(f"  {num:>2}) {label:<32} = {v:<8} (0x{v:0{size*2}X})")
+            else:
+                print(f"  {num:>2}) {label:<32} = <read error>")
+            index.append(key)
+            num += 1
+
+    print(f"\n  Read-Only:")
+    for key, label in READONLY_PARAMS:
+        addr, size = PARAMS[key]
+        v = values.get(key)
+        if v is not None:
+            print(f"      {label:<32} = {v:<8} (0x{v:0{size*2}X})")
+        else:
+            print(f"      {label:<32} = <read error>")
+
+    print()
+    return index
+
+
+def cmd_menu(m01, args):
+    if not m01.enter_config():
+        print("Sensor not responding."); return 1
+
+    try:
+        device_id = m01.device_id()
+    except IOError:
+        device_id = "????"
+    fw = m01.firmware_version()
+
+    print("  Reading parameters...")
+    values = _read_all_params(m01)
+    index = _print_menu(device_id, fw, values)
+
+    while True:
+        try:
+            choice = input("  Enter number to edit, 'r' to re-read, 'q' to quit: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        if choice.lower() == 'q':
+            break
+
+        if choice.lower() == 'r':
+            print("  Re-reading...")
+            values = _read_all_params(m01)
+            index = _print_menu(device_id, fw, values)
+            continue
+
+        try:
+            n = int(choice)
+        except ValueError:
+            print("  Invalid input.")
+            continue
+
+        if n < 1 or n > len(index):
+            print(f"  Pick 1-{len(index)}.")
+            continue
+
+        key = index[n - 1]
+        addr, size = PARAMS[key]
+        label = None
+        for _, params in MENU_PARAMS:
+            for k, l in params:
+                if k == key:
+                    label = l
+                    break
+
+        cur = values.get(key)
+        cur_str = f"{cur} (0x{cur:0{size*2}X})" if cur is not None else "<unknown>"
+        try:
+            raw = input(f"  {label} [{cur_str}] new value (hex ok, blank=cancel): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            continue
+
+        if not raw:
+            continue
+
+        try:
+            new_val = int(raw, 0)
+        except ValueError:
+            print("  Invalid number.")
+            continue
+
+        max_val = (1 << (size * 8)) - 1
+        if new_val < 0 or new_val > max_val:
+            print(f"  Value out of range (0-{max_val} / 0x{max_val:X}).")
+            continue
+
+        try:
+            m01.set_param(key, new_val)
+            m01.update_checksums()
+            rb = m01.get_param(key)
+            values[key] = rb
+            ok = "OK" if rb == new_val else "MISMATCH"
+            print(f"  Wrote {key} = {new_val} (0x{new_val:X}), readback {rb} [{ok}]")
+        except IOError as e:
+            print(f"  Write failed: {e}")
+
+    print("  Power-cycle the sensor to apply changes.")
+    return 0
+
+
 def auto_int(x):
     return int(x, 0)
 
@@ -409,6 +572,7 @@ def main():
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("scan", help="probe the bus for the sensor (power-cycle when prompted)")
     sub.add_parser("dump", help="read and decode all parameters")
+    sub.add_parser("menu", help="interactive menu to read/edit parameters")
 
     prd = sub.add_parser("rawdump", help="hex dump a range of EEPROM bytes")
     prd.add_argument("--start", type=auto_int, default=0x00, dest="start_addr",
@@ -435,7 +599,8 @@ def main():
     bus = open_bus(args)
     m01 = M01(bus, node=args.node, timeout=args.timeout, verbose=args.verbose)
     try:
-        fn = {"scan": cmd_scan, "dump": cmd_dump, "rawdump": cmd_rawdump,
+        fn = {"scan": cmd_scan, "dump": cmd_dump, "menu": cmd_menu,
+              "rawdump": cmd_rawdump,
               "read": cmd_read, "write": cmd_write, "set": cmd_set}[args.cmd]
         return fn(m01, args)
     finally:
